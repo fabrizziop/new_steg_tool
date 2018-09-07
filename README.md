@@ -20,14 +20,19 @@ If an encryption slot isn't used, its corresponding data in the beginning and en
 S1 to S4, each represent the salt bytes of each encryption slot. They are used to generate two encryption keys for slot, which are concatenated to create a 128 byte master key (per slot):
 
 K_SCRYPT = SCRYPT(N=2^17, R=8, P=20, *SLOT PASSWORD*)
+
 K_SHA512 = PBKDF2(iters=4000000, SHA512, *SLOT PASSWORD*)
+
 K_MAIN = K_SCRYPT + K_SHA512
 
 With the main key, four subkeys are derivated:
 
 K_AES256 = SHA256(SHA512(K_MAIN))
+
 K_HMAC1 = SHA256(SHA384(K_MAIN+K_MAIN))
+
 K_HMAC2 = SHA256(SHA256(K_MAIN+K_MAIN+K_MAIN))
+
 K_ESK = SHA256(SHA1(K_MAIN))
 
 ESK1 to ESK4 are the encrypted shared final HMAC keys. A single 16 byte key is generated at the start of the encryption process. For every encryption slot used, the final HMAC key (HMACF_KEY) is XOR'd with K_ESK to create ESK1-ESK4.
