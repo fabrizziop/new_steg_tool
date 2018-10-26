@@ -27,13 +27,13 @@ K_MAIN = K_SCRYPT + K_SHA512
 
 With the main key, four subkeys are derivated:
 
-K_AES256 = SHA256(SHA512(K_MAIN))
+K_AES256 = SHA256(SHA3_512(K_MAIN))
 
-K_HMAC1 = SHA256(SHA384(K_MAIN+K_MAIN))
+K_HMAC1 = SHA256(SHA3_384(K_MAIN+K_MAIN))
 
-K_HMAC2 = SHA256(SHA256(K_MAIN+K_MAIN+K_MAIN))
+K_HMAC2 = SHA256(SHA3_256(K_MAIN+K_MAIN+K_MAIN))
 
-K_ESK = SHA256(SHA1(K_MAIN))
+K_ESK = SHA3_256(SHA1(K_MAIN))
 
 ESK1 to ESK4 are the encrypted shared final HMAC keys. A single 16 byte key is generated at the start of the encryption process. For every encryption slot used, the final HMAC key (HMACF_KEY) is XOR'd with K_ESK to create ESK1-ESK4.
 
@@ -41,7 +41,7 @@ At this point, each slot's stream cipher (AES256-CTR) is initialized, with K_AES
 
 L1 to L4 represent each file's start and end position inside the encrypted data. Each 16 byte segment is divided into two 8-byte segments, the first one tells the program where the encrypted file data will begin inside the whole data blob. The second one, where it will end. Both are encoded little-endian, and are encrypted with the stream cipher. Paddings and file locations are calculated just before this.
 
-HMAC1-1 to HMAC1-4 are HMAC_SHA512 checksums, that cover the integrity from S1 to L4. The key used for each slot's HMAC1 is K_HMAC1.
+HMAC1-1 to HMAC1-4 are HMAC_SHA3_512 authentication constructions, that cover the integrity from S1 to L4. The key used for each slot's HMAC1 is K_HMAC1.
 
 The main section of the resulting data from the encryption:
 
@@ -58,18 +58,22 @@ Data at the end of file.
 |-|-|-|-|-|
 |-320:-256|-256:-192|-192:-128|-128:-64|-64:|
 
-HMAC2-1 to HMAC-4 are HMAC_SHA512 checksums, that cover the integrity from S1 to just before HMAC2-1. The key used for each slot's HMAC2 is K_HMAC2.
+HMAC2-1 to HMAC2-4 are HMAC constructions with SHA3_512, that cover the integrity from S1 to just before HMAC2-1. The key used for each slot's HMAC2 is K_HMAC2.
 
 Because a possible attacker that controls the storage location (e.g. Dropbox) could carry this attack:
 
-1. Alter one of the HMAC2 checksums
+1. Alter one of the HMAC2.
 2. See if the user detects corruption and replaces the file or does something unusual.
 3. If the user doesn't react, the slot altered wasn't in usage (was just random data)
 
-A solution to this was implemented. The Final HMAC checksum is verified before HMAC2, and because there's a single checksum and all slots have access to its key, by accessing a slot the user could know another slot's HMAC2 was altered and take (or not) appropiate measures. HMAC-FINAL is also HMAC_SHA512.
+A solution to this was implemented. The Final HMAC integrity check is verified before HMAC2, and because there's a single HMAC and all slots have access to its key, by accessing a slot the user could know another slot's HMAC2 was altered and take (or not) appropiate measures. HMAC-FINAL is also HMAC_SHA3_512.
 
 Suggestions, issues and bugfixes are welcome. Email me to PGP key:
 
 > B48D57027501810FBE2538332C14F1ACFB154963
 
 The usage of the program is at your own risk. I did the best I could.
+
+** Changelog **
+
+v2.0.0 - Switch from pycrypto to pycryptodome, switch some HMACs and normal hashes to SHA3 alternatives.
