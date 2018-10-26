@@ -1,20 +1,13 @@
-from Crypto import Random
-from Crypto.Random import random
-from Crypto.Cipher import AES
-from Crypto.Util import Counter
+from Cryptodome import Random
+from Cryptodome.Random import random
+from Cryptodome.Cipher import AES
+from Cryptodome.Util import Counter
 import hashlib
 import hmac
 import time
 import getpass
 
-PROGRAM_NAME = "NewStegTool v1.0.0"
-
-# values for debugging ONLY.
-# ~ SCRYPT_R = 8
-# ~ SCRYPT_N = 2**8
-# ~ SCRYPT_P = 1
-# ~ SHA512_ITERS = 40
-
+PROGRAM_NAME = "NewStegTool v2.0.0"
 
 
 SCRYPT_R = 8
@@ -30,7 +23,6 @@ TOTAL_OVERHEAD_END = 320
 TOTAL_OVERHEAD_LENGTH = TOTAL_OVERHEAD_BEGINNING + TOTAL_OVERHEAD_END
 
 print(SCRYPT_MAXMEM//1024, "KB FOR SCRYPT")
-main_rng = Random.new()
 
 def read_file_to_bytearray(file_name):
 	try:
@@ -74,7 +66,7 @@ def do_xor_on_bytes(bs1,bs2):
 def generate_keyslot(passphrase):
 	encoded_passphrase = passphrase.encode()
 	# ~ print(encoded_passphrase)
-	salt_to_use = main_rng.read(64)
+	salt_to_use = Random.get_random_bytes(64)
 	generated_key_scrypt = hashlib.scrypt(encoded_passphrase, salt=salt_to_use, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P, maxmem=SCRYPT_MAXMEM)
 	generated_key_keccak = hashlib.pbkdf2_hmac('sha512', encoded_passphrase, salt_to_use, SHA512_ITERS)
 	return salt_to_use, generated_key_scrypt+generated_key_keccak
@@ -88,25 +80,24 @@ def read_keyslot(salt, passphrase):
 	return generated_key_scrypt+generated_key_keccak
 	
 def generate_keys_from_master(master_key):
-	AES256_KEY = hashlib.sha256(hashlib.sha512(master_key).digest()).digest()
-	HMAC1_KEY = hashlib.sha256(hashlib.sha384(master_key+master_key).digest()).digest()
-	HMAC2_KEY = hashlib.sha256(hashlib.sha256(master_key+master_key+master_key).digest()).digest()
-	ECK_XOR = hashlib.sha256(hashlib.sha1(master_key).digest()).digest()
+	AES256_KEY = hashlib.sha256(hashlib.sha3_512(master_key).digest()).digest()
+	HMAC1_KEY = hashlib.sha256(hashlib.sha3_384(master_key+master_key).digest()).digest()
+	HMAC2_KEY = hashlib.sha256(hashlib.sha3_256(master_key+master_key+master_key).digest()).digest()
+	ECK_XOR = hashlib.sha3_256(hashlib.sha1(master_key).digest()).digest()
 	return [AES256_KEY, HMAC1_KEY, HMAC2_KEY, ECK_XOR]
 	# ~ print(generated_key_keccak)
 	# ~ print(time.time()-t1)
 
 def calculate_hmac1_hmac2(input_data, key):
-	return hmac.new(key,msg=input_data,digestmod=hashlib.sha512).digest()
+	return hmac.new(key,msg=input_data,digestmod=hashlib.sha3_512).digest()
 
-#usar sha3 para derivar claves y cosas asi :v
 
 class AES256_CTR(object):
 	def __init__(self, key):
 		self.key = key
 		self.counter = Counter.new(128)
 		if len(self.key) != 32:
-			print("AES KEY ERROR")
+			print("AES KEY ERROR, CIPHER INSECURE")
 			print("REPORT THIS ERROR")
 			print("YOU SHOULD ****NEVER**** SEE THIS")
 			quit()
@@ -184,7 +175,7 @@ class MAIN_ENCRYPT(object):
 		#generating keys/randomness
 		generated_keyslots = [None, None, None, None]
 		generated_keyslots_keys_from_master = [None, None, None, None]
-		generated_final_hmac_key = main_rng.read(32)
+		generated_final_hmac_key = Random.get_random_bytes(32)
 		cipher_slots = [None, None, None, None]
 		calculated_hmac1 = [None, None, None, None]
 		calculated_hmac2 = [None, None, None, None]
@@ -197,14 +188,14 @@ class MAIN_ENCRYPT(object):
 				generated_encrypted_file.extend(generated_keyslots[i][0])
 				cipher_slots[i] = AES256_CTR(generated_keyslots_keys_from_master[i][0]) #using first key
 			else:
-				generated_encrypted_file.extend(main_rng.read(64))
+				generated_encrypted_file.extend(Random.get_random_bytes(64))
 		#WRITING FINAL SHARED HMAC KEY
 		for i in range(0,4):
 			if self.files_ok[i] == True:
 				current_hmac_encrypted_key = do_xor_on_bytes(generated_final_hmac_key, generated_keyslots_keys_from_master[i][3])
 				generated_encrypted_file.extend(current_hmac_encrypted_key)
 			else:
-				generated_encrypted_file.extend(main_rng.read(32))
+				generated_encrypted_file.extend(Random.get_random_bytes(32))
 		#WRITING LENGTHS
 		for i in range(0,4):
 			if self.files_ok[i] == True:
@@ -213,7 +204,7 @@ class MAIN_ENCRYPT(object):
 				generated_encrypted_file.extend(encrypted_init_length)
 				generated_encrypted_file.extend(encrypted_end_length)
 			else:
-				generated_encrypted_file.extend(main_rng.read(16))
+				generated_encrypted_file.extend(Random.get_random_bytes(16))
 		#CALCULATING HMAC1
 		for i in range(0,4):
 			if self.files_ok[i] == True:
@@ -224,16 +215,16 @@ class MAIN_ENCRYPT(object):
 			if self.files_ok[i] == True:
 				generated_encrypted_file.extend(calculated_hmac1[i])
 			else:
-				generated_encrypted_file.extend(main_rng.read(64))
+				generated_encrypted_file.extend(Random.get_random_bytes(64))
 		#writing P1, EF1, P2, EF2, P3, EF3, P4, EF4
 		for i in range(0,4):
-			generated_encrypted_file.extend(main_rng.read(self.padding_sizes[i]))
+			generated_encrypted_file.extend(Random.get_random_bytes(self.padding_sizes[i]))
 			if self.files_ok[i] == True:
 				generated_encrypted_file.extend(cipher_slots[i].encrypt(self.files_read[i]))
 			else:
 				pass
 		#WRITING P5
-		generated_encrypted_file.extend(main_rng.read(self.padding_sizes[4]))
+		generated_encrypted_file.extend(Random.get_random_bytes(self.padding_sizes[4]))
 		#CALCULATING HMAC2
 		for i in range(0,4):
 			if self.files_ok[i] == True:
@@ -244,7 +235,7 @@ class MAIN_ENCRYPT(object):
 			if self.files_ok[i] == True:
 				generated_encrypted_file.extend(calculated_hmac2[i])
 			else:
-				generated_encrypted_file.extend(main_rng.read(64))
+				generated_encrypted_file.extend(Random.get_random_bytes(64))
 		#calculating FINAL HMAC
 		final_hmac = calculate_hmac1_hmac2(generated_encrypted_file, generated_final_hmac_key)
 		#writing final HMAC
@@ -252,7 +243,7 @@ class MAIN_ENCRYPT(object):
 		# ~ print("WRITTEN FINAL HMAC:", final_hmac)
 		# ~ print("KEYS:",generated_keyslots)
 		# ~ print("KEYS FROM MASTER")
-		print(generated_keyslots_keys_from_master)
+		# ~ print(generated_keyslots_keys_from_master)
 		# ~ print("FILE LENGTH:", len(generated_encrypted_file))
 		return generated_encrypted_file
 
