@@ -77,3 +77,10 @@ The usage of the program is at your own risk. I did the best I could.
 ** Changelog **
 
 v2.0.0 - Switch from pycrypto to pycryptodome, switch some HMACs and normal hashes to SHA3 alternatives.
+
+GUI v1.0.0 - PyQT5 GUI, no underlying encryption changes. 
+
+** TO-DO **
+
+Better GUI Icon
+Splitting the code into one crypto handling library, and one command line or GUI script.
